@@ -23,15 +23,18 @@ namespace ProjetoFinal
 
         Model scenario;
         float scenarioScale;
+        float proportionScenarioTank;
 
         Model tank3D;
         float tankScale;
-        float angulo;
-        Vector3 posicao;
+        float tankAngle;
+        Vector3 tankPosition;
 
         float distance;
         float visionAngle;
         float visionY;
+
+        Texture2D flare;
 
         public Game1()
         {
@@ -49,11 +52,12 @@ namespace ProjetoFinal
         {
             /* Camera Inicialization */
             distance = 200;
-            visionAngle = 90;
+            visionAngle = 0;
             visionY = 40;
+            proportionScenarioTank = 3;
 
-            tankScale = 0.01f;
-            scenarioScale = tankScale * 3;
+            tankScale = 0.02f;
+            scenarioScale = tankScale * proportionScenarioTank;
 
             base.Initialize();
         }
@@ -70,7 +74,8 @@ namespace ProjetoFinal
             tank3D = Content.Load<Model>("EBRBB");
             scenario = Content.Load<Model>("cenario_ceu");
 
-            posicao = new Vector3(0, 9f, 60);
+            flare = Content.Load<Texture2D>("flare");
+            tankPosition = new Vector3(0, 300 * scenarioScale, 3000 * scenarioScale);
 
         }
 
@@ -99,7 +104,7 @@ namespace ProjetoFinal
             if (Keyboard.GetState().IsKeyDown(Keys.Left)) visionAngle++;
             if (Keyboard.GetState().IsKeyDown(Keys.Right)) visionAngle--;
             if (Keyboard.GetState().IsKeyDown(Keys.Z)) distance = distance > 50 ? --distance : 50;
-            if (Keyboard.GetState().IsKeyDown(Keys.X)) distance = distance < 200 ? ++distance : 200;
+            if (Keyboard.GetState().IsKeyDown(Keys.X)) distance = distance < 2000 ? ++distance : 2000;
             if (Keyboard.GetState().IsKeyDown(Keys.Up)) visionY++;
             if (Keyboard.GetState().IsKeyDown(Keys.Down)) visionY--;
 
@@ -113,16 +118,22 @@ namespace ProjetoFinal
         protected override void Draw(GameTime gameTime)
         {
             GraphicsDevice.Clear(Color.CornflowerBlue);
-
+            #region camera
             Matrix projecao = Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(45), GraphicsDevice.Viewport.AspectRatio, 1, 10000);
-            Matrix view = Matrix.CreateLookAt(new Vector3((float)Math.Cos(MathHelper.ToRadians(visionAngle)) * distance, visionY, (float)Math.Sin(MathHelper.ToRadians(visionAngle)) * distance), Vector3.Zero, Vector3.Up);
-            //Matrix world1 = Matrix.CreateRotationY(angulo) * Matrix.CreateTranslation(posicao);
-            Matrix worldScenario = Matrix.CreateScale(scenarioScale);
-            Matrix worldTank = Matrix.CreateScale(tankScale) * Matrix.CreateTranslation(posicao);
+            Matrix view = Matrix.CreateLookAt(
+                new Vector3((float)Math.Cos(MathHelper.ToRadians(visionAngle)) * distance , visionY, (float)Math.Sin(MathHelper.ToRadians(visionAngle)) * distance) + tankPosition, 
+                tankPosition, 
+                Vector3.Up);
+            #endregion
 
+            #region scenario
             /* draw scenario */
+            Matrix worldScenario = Matrix.CreateScale(scenarioScale);
+
             Matrix[] transforms = new Matrix[scenario.Bones.Count];
             scenario.CopyAbsoluteBoneTransformsTo(transforms);
+
+            Vector3[] positionBulbs = new Vector3[4];
             foreach (ModelMesh malha in scenario.Meshes)
             {
                 foreach (BasicEffect efeitoShader in malha.Effects)
@@ -138,12 +149,36 @@ namespace ProjetoFinal
                         efeitoShader.DirectionalLight0.DiffuseColor = Color.Red.ToVector3();
                         efeitoShader.EmissiveColor = Color.LightBlue.ToVector3();
                     }
+                    else
+                    {
+                        efeitoShader.EnableDefaultLighting();
+                    }
+
+                    // Get bulb positions in 3D (Sphere 13-16)
+                    if (malha.Name == "Sphere13") positionBulbs[0] = GraphicsDevice.Viewport.Project(new Vector3(0, 0, 0), efeitoShader.Projection, efeitoShader.View, efeitoShader.World);
+                    if (malha.Name == "Sphere14") positionBulbs[1] = GraphicsDevice.Viewport.Project(new Vector3(0, 0, 0), efeitoShader.Projection, efeitoShader.View, efeitoShader.World);
+                    if (malha.Name == "Sphere015") positionBulbs[2] = GraphicsDevice.Viewport.Project(new Vector3(0, 0, 0), efeitoShader.Projection, efeitoShader.View, efeitoShader.World);
+                    if (malha.Name == "Sphere016") positionBulbs[3] = GraphicsDevice.Viewport.Project(new Vector3(0, 0, 0), efeitoShader.Projection, efeitoShader.View, efeitoShader.World);
                 }
 
                 malha.Draw();
             }
+            
+            // Draw the texture in the poles
+            spriteBatch.Begin(SpriteBlendMode.Additive, SpriteSortMode.Immediate, SaveStateMode.SaveState);
 
+            foreach (Vector3 positionBulb in positionBulbs)
+                if (positionBulb.Z < 1)
+                spriteBatch.Draw(flare, new Vector2(positionBulb.X, positionBulb.Y), null, Color.White, 0, new Vector2(flare.Width / 2, flare.Height / 2), (1 - positionBulb.Z) * 1500 * scenarioScale, SpriteEffects.None, 0);
+
+            spriteBatch.End();
+            #endregion
+
+            #region tank
             /* draw tank */
+            //Matrix world1 = Matrix.CreateRotationY(angulo) * Matrix.CreateTranslation(posicao);
+            Matrix worldTank = Matrix.CreateScale(tankScale) * Matrix.CreateTranslation(tankPosition);
+
             transforms = new Matrix[tank3D.Bones.Count];
             tank3D.CopyAbsoluteBoneTransformsTo(transforms);
             foreach (ModelMesh malha in tank3D.Meshes)
@@ -159,6 +194,7 @@ namespace ProjetoFinal
                 malha.Draw();
             }
             base.Draw(gameTime);
+            #endregion
         }
     }
 }
